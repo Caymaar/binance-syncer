@@ -1,0 +1,22 @@
+# Log files
+*.log
+
+# Dependency directories
+node_modules/
+vendor/
+
+# Build output
+dist/
+build/
+
+# Environment variables
+.env
+
+# System files
+.DS_Store
+Thumbs.db
+__pycache__/
+
+# IDE settings
+.vscode/
+.idea/
