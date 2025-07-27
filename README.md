@@ -16,22 +16,17 @@
 
 ## 📦 Installation
 
-### From PyPI (recommended)
-```bash
-pip install binance-syncer
-```
-
 ### From source
 ```bash
-git clone https://github.com/your-username/crypto-data-manager.git
-cd crypto-data-manager
+git clone https://github.com/caymaar/binance-syncer.git
+cd binance-syncer
 pip install .
 ```
 
 ### Development mode
 ```bash
-git clone https://github.com/your-username/crypto-data-manager.git
-cd crypto-data-manager
+git clone https://github.com/caymaar/binance-syncer.git
+cd binance-syncer
 pip install -e .
 ```
 
@@ -104,8 +99,7 @@ binance-syncer --market-type futures/um --data-type klines --interval 4h \
 
 ```python
 import asyncio
-from binance_syncer import BinanceDataSync
-from binance_syncer.utils.enums import MarketType, DataType, KlineInterval
+from binance_syncer import BinanceDataSync, MarketType, DataType, KlineInterval
 
 async def main():
     # Configure syncer
@@ -267,11 +261,3 @@ binance-syncer --market-type spot --data-type klines --interval 1d \
 - **Memory**: Minimum 2GB RAM (recommended 4GB+ for large volumes)
 - **Network**: Stable internet connection
 - **AWS**: Configured credentials (for S3 storage)
-
-## 🤝 Contributing
-
-1. Fork the project
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
