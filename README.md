@@ -2,7 +2,7 @@
 
 **Binance Data Syncer** is a high-performance synchronization tool for downloading and managing Binance historical data (klines, trades, etc.) asynchronously. It supports both local and S3 storage with intelligent data optimization (monthly vs daily preference).
 
-## 🚀 Features
+## Features
 
 - **Asynchronous synchronization**: Concurrent downloading optimized for large volumes
 - **Multi-market support**: SPOT, FUTURES (UM/CM), and OPTIONS markets
@@ -14,7 +14,7 @@
 - **Progress tracking**: Progress bar with rich console
 - **Advanced logging**: Structured logs with automatic rotation
 
-## 📦 Installation
+## Installation
 
 ### From source
 ```bash
@@ -121,7 +121,7 @@ async def main():
 asyncio.run(main())
 ```
 
-## 📁 Data Structure
+## Data Structure
 
 ### Local storage
 ```
@@ -154,7 +154,7 @@ s3://your-bucket/
 │   │   │   │   │   │   └── ...
 ```
 
-## 📊 Supported Data Types
+## Supported Data Types
 
 | Data Type | Market Types | Interval Required |
 |-----------|--------------|-------------------|
@@ -172,7 +172,7 @@ s3://your-bucket/
 - **Days**: 1d
 - **Weeks**: 1w
 
-## 🔧 Project Architecture
+## Project Architecture
 
 ```
 src/binance_syncer/
@@ -186,7 +186,7 @@ src/binance_syncer/
     └── config.ini          # Default configuration
 ```
 
-## 📝 Logging and Monitoring
+## Logging and Monitoring
 
 ### Log files
 Logs are automatically created in:
@@ -211,7 +211,7 @@ tail -f ~/logs/binance_syncer/log_$(date +%Y%m%d)_*.log
 grep "ERROR" ~/logs/binance_syncer/log_*.log
 ```
 
-## ⚡ Performance and Optimizations
+## Performance and Optimizations
 
 ### Concurrency
 - **Downloads**: 50 simultaneous tasks per symbol
@@ -229,7 +229,7 @@ grep "ERROR" ~/logs/binance_syncer/log_*.log
 - **Deduplication**: Avoids downloading existing files
 - **Compression**: Parquet format with Snappy compression
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common SSL issues
 ```bash
@@ -254,7 +254,7 @@ binance-syncer --market-type spot --data-type klines --interval 1d \
   --verbose --dry-run
 ```
 
-## 📋 Requirements
+## Requirements
 
 - **Python**: >= 3.11
 - **System**: macOS, Linux, Windows
