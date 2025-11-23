@@ -42,5 +42,35 @@ class KlineInterval(Enum):
     D1 = "1d"
     W1 = "1w"
 
+SCHEMA = {
+    MarketType.SPOT:       [DataType.AGG_TRADES, 
+                            DataType.KLINES, 
+                            DataType.TRADES],
+
+    MarketType.OPTION :    [DataType.BVOL_INDEX, 
+                            DataType.EOH_SUMMARY],
+
+    MarketType.FUTURES_CM: [DataType.AGG_TRADES, 
+                            DataType.BOOK_DEPTH, 
+                            DataType.BOOK_TICKER, 
+                            DataType.INDEX_PRICE_KLINES, 
+                            DataType.KLINES, 
+                            DataType.LIQUIDATION_SNAPSHOT,
+                            DataType.MARK_PRICE_KLINES,
+                            DataType.METRICS,
+                            DataType.PREMIUM_INDEX_KLINES, 
+                            DataType.TRADES],
+                            
+    MarketType.FUTURES_UM: [DataType.AGG_TRADES,
+                            DataType.BOOK_DEPTH,
+                            DataType.BOOK_TICKER,
+                            DataType.INDEX_PRICE_KLINES,
+                            DataType.KLINES,
+                            DataType.MARK_PRICE_KLINES,
+                            DataType.METRICS,
+                            DataType.PREMIUM_INDEX_KLINES, 
+                            DataType.TRADES],
+}
+
 class Headers(Enum):
    KLINES = ["open_time", "open", "high", "low", "close", "volume", "close_time", "quote_asset_volume", "nb_trades", "taker_buy_base_vol", "taker_buy_quote_vol", "ignore"]
