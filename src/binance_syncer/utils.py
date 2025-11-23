@@ -1,7 +1,9 @@
 from dataclasses import dataclass
-from binance_syncer.utils.enums import MarketType, DataType, Frequency, KlineInterval, BASE_URL
 import pandas as pd
 from datetime import datetime
+
+from binance_syncer.constant import MarketType, DataType, Frequency, KlineInterval, BASE_URL
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -70,29 +72,6 @@ def safe_parse_time(series: pd.Series) -> pd.Series:
             continue
     logger.error(f"Impossible to parse time for {series.name} with sample {sample}")
     raise ValueError(f"Cannot parse timestamp {sample}")
-
-def get_config():
-    import configparser
-    from pathlib import Path
-
-    config_path = Path.home() / 'config' / 'binance_syncer.ini'
-
-    if not config_path.exists():
-        logger.warning(f"Configuration file not found at {config_path}. Creating a new one at default location ({config_path}).\n You may need to adjust the settings manually in the configuration file.")
-        config = configparser.ConfigParser()
-        config['DEFAULT'] = {
-            'LOCAL_PREFIX': f"{Path.home()}/binance",
-            'REMOTE_PREFIX': "binance",
-            'S3_BUCKET': "caymar-crypto-data",
-        }
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(config_path, 'w') as config_file:
-            config.write(config_file)
-
-    config = configparser.ConfigParser()
-    config.read(config_path)
-
-    return config
 
 if __name__ == "__main__":
     # Exemple d'utilisation

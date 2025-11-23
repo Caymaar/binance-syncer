@@ -6,24 +6,44 @@ from io import BytesIO
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
-from binance_syncer.utils.logger import console
-from binance_syncer.utils.enums import MarketType, DataType, Frequency, KlineInterval, Headers
-from binance_syncer.utils.utils import BinancePathBuilder, safe_parse_time, get_config
+from utilities import Config, LoggingConfigurator
+
+from binance_syncer.constant import MarketType, DataType, Frequency, KlineInterval, Headers
+from binance_syncer.utils import BinancePathBuilder, safe_parse_time
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-MAX_CONCURRENT_TASKS = 100        # download/convert concurrency per symbol
-SYMBOL_CONCURRENCY = 10           # number of symbols processed in parallel
+BINANCE_SYNCER_CONFIG_DICT = {
+    'LOCAL': {
+        "PATH": f"{Path.home()}/binance-vision"
+        },
+    'S3': {
+        "BUCKET": "my-binance-data-bucket",
+        "PREFIX": "binance-vision"
+        },
+    'SETTINGS': {
+        "MAX_CONCURRENT_DOWNLOADS": 100,
+        "SYMBOL_CONCURRENCY": 10,
+        "BATCH_SIZE_SYNC": 20,
+        "BATCH_SIZE_DELETE": 1000
+        }
+}
 
-config = get_config()
+Config.ensure_initialized("binance_syncer", BINANCE_SYNCER_CONFIG_DICT)
+
 
 class BinanceDataSync:
 
-    LOCAL_PREFIX = config.get('DEFAULT', 'LOCAL_PREFIX')
-    REMOTE_PREFIX = config.get('DEFAULT', 'REMOTE_PREFIX')
-    S3_BUCKET = config.get('DEFAULT', 'S3_BUCKET')
+    LOCAL_PREFIX = Config.BINANCE_SYNCER.LOCAL.PATH
+    S3_PREFIX = Config.BINANCE_SYNCER.S3.PREFIX
+    S3_BUCKET = Config.BINANCE_SYNCER.S3.BUCKET
+
+    MAX_CONCURRENT_TASKS = int(Config.BINANCE_SYNCER.SETTINGS.MAX_CONCURRENT_DOWNLOADS)        # download/convert concurrency per symbol
+    SYMBOL_CONCURRENCY = int(Config.BINANCE_SYNCER.SETTINGS.SYMBOL_CONCURRENCY)                # number of symbols processed in parallel
+    BATCH_SIZE_SYNC = int(Config.BINANCE_SYNCER.SETTINGS.BATCH_SIZE_SYNC)                      # number of files processed in a batch
+    BATCH_SIZE_DELETE = int(Config.BINANCE_SYNCER.SETTINGS.BATCH_SIZE_DELETE)                  # number of files processed in a batch
 
     def __init__(self, storage_mode: str, market_type: MarketType, data_type: DataType, 
                     interval: KlineInterval = None, progress: bool = False):
@@ -160,7 +180,7 @@ class BinanceDataSync:
         """
 
         if self.storage_mode == 's3':
-            prefix = self.path_builder.build_save_path(self.REMOTE_PREFIX, symbol)
+            prefix = self.path_builder.build_save_path(self.S3_PREFIX, symbol)
             paginator = self.s3.get_paginator("list_objects_v2")
             existing = set()
             for page in paginator.paginate(Bucket=self.S3_BUCKET, Prefix=prefix):
@@ -326,7 +346,7 @@ class BinanceDataSync:
         
         # Download new files
         if to_fetch:
-            download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS // 2)
+            download_semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_TASKS // 2)
             
             connector = aiohttp.TCPConnector(
                 ssl=self._ssl_context,
@@ -343,10 +363,9 @@ class BinanceDataSync:
             )
             
             async with aiohttp.ClientSession(connector=connector, timeout=timeout) as sess:
-                batch_size = 20
                 
-                for i in range(0, len(to_fetch), batch_size):
-                    batch_urls = to_fetch[i:i + batch_size]
+                for i in range(0, len(to_fetch), self.BATCH_SIZE_SYNC):
+                    batch_urls = to_fetch[i:i + self.BATCH_SIZE_SYNC]
                     
                     batch_tasks = [
                         self.download_and_store(sess, symbol, url, download_semaphore) 
@@ -358,7 +377,7 @@ class BinanceDataSync:
                     success_count = sum(1 for r in results if r is True)
                     failed_count = len(batch_tasks) - success_count
                     
-                    logger.info(f"{symbol}: Batch {i//batch_size + 1}/{(len(to_fetch) + batch_size - 1)//batch_size} - "
+                    logger.info(f"{symbol}: Batch {i//self.BATCH_SIZE_SYNC + 1}/{(len(to_fetch) + self.BATCH_SIZE_SYNC - 1)//self.BATCH_SIZE_SYNC} - "
                                f"{success_count}/{len(batch_tasks)} success")
                     if failed_count > 0:
                         logger.warning(f"{symbol}: {failed_count} downloads failed in this batch")
@@ -392,7 +411,7 @@ class BinanceDataSync:
             filename = f"{'-'.join(file_key.split('/')[-1].replace('.zip', '').split('-')[2:])}.parquet"
 
             if self.storage_mode == 's3':
-                file_path = self.path_builder.build_save_path(self.REMOTE_PREFIX, symbol, filename)
+                file_path = self.path_builder.build_save_path(self.S3_PREFIX, symbol, filename)
                 try:
                     self.s3.head_object(Bucket=self.S3_BUCKET, Key=file_path)
                     logger.debug(f"File already exists: {file_path}")
@@ -473,12 +492,11 @@ class BinanceDataSync:
             
         delete_objects = []
         for date in files_to_delete:
-            file_path = self.path_builder.build_save_path(self.REMOTE_PREFIX, symbol, f"{date}.parquet")
+            file_path = self.path_builder.build_save_path(self.S3_PREFIX, symbol, f"{date}.parquet")
             delete_objects.append({'Key': file_path})
         
-        batch_size = 1000
-        for i in range(0, len(delete_objects), batch_size):
-            batch = delete_objects[i:i + batch_size]
+        for i in range(0, len(delete_objects), self.BATCH_SIZE_DELETE):
+            batch = delete_objects[i:i + self.BATCH_SIZE_DELETE]
             try:
                 response = self.s3.delete_objects(
                     Bucket=self.S3_BUCKET,
@@ -507,7 +525,7 @@ class BinanceDataSync:
                                            operations, ensuring controlled access to the resources.
         Behavior:
             - If the storage_mode is 's3':
-                Constructs the remote file path using the REMOTE_PREFIX, symbol, and file identifier.
+                Constructs the remote file path using the S3_PREFIX, symbol, and file identifier.
                 It then attempts to asynchronously delete the object from the specified S3 bucket.
                 Errors during deletion are caught and logged.
             - For local storage:
@@ -540,7 +558,7 @@ class BinanceDataSync:
 
             async with semaphore:
                 if self.storage_mode == 's3':
-                    file_path = self.path_builder.build_save_path(self.REMOTE_PREFIX, symbol, f"{file_date}.parquet")
+                    file_path = self.path_builder.build_save_path(self.S3_PREFIX, symbol, f"{file_date}.parquet")
                     try:
                         await self.s3_async.delete_object(Bucket=self.S3_BUCKET, Key=file_path)
                         logger.info(f"Deleted {file_path}")
@@ -582,18 +600,18 @@ class BinanceDataSync:
                 BarColumn(),
                 TimeElapsedColumn(),
                 TimeRemainingColumn(),
-                console=console,
+                console=LoggingConfigurator.get_console(),
                 transient=False
             ) as progress:
                 
                 task = progress.add_task("Syncing symbols...", total=len(symbols))
-                for i in range(0, len(symbols), SYMBOL_CONCURRENCY * 2):
-                    batch = symbols[i:i + SYMBOL_CONCURRENCY * 2]
+                for i in range(0, len(symbols), self.SYMBOL_CONCURRENCY * 2):
+                    batch = symbols[i:i + self.SYMBOL_CONCURRENCY * 2]
                     await asyncio.gather(*(self.sync_symbol(s) for s in batch))
                     progress.update(task, advance=len(batch))
         else:
-            for i in range(0, len(symbols), SYMBOL_CONCURRENCY * 2):
-                batch = symbols[i:i + SYMBOL_CONCURRENCY * 2]
+            for i in range(0, len(symbols), self.SYMBOL_CONCURRENCY * 2):
+                batch = symbols[i:i + self.SYMBOL_CONCURRENCY * 2]
                 await asyncio.gather(*(self.sync_symbol(s) for s in batch))
 
             logger.info("Sync complete")

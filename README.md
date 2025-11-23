@@ -1,6 +1,8 @@
-# Binance Data Syncer
+# Binance Syncer
 
-**Binance Data Syncer** is a high-performance synchronization tool for downloading and managing Binance historical data (klines, trades, etc.) asynchronously. It supports both local and S3 storage with intelligent data optimization (monthly vs daily preference).
+**Binance Syncer** is a high-performance synchronization tool for downloading and managing Binance historical data (klines, trades, etc.) asynchronously. It supports both local and S3 storage with intelligent data optimization (monthly vs daily preference).
+
+![Version](https://img.shields.io/github/v/tag/Caymaar/binance-syncer?label=version)
 
 ## Features
 
@@ -16,6 +18,18 @@
 
 ## Installation
 
+### From pip
+
+```bash
+pip install binance-syncer
+```
+
+### From uv
+
+```bash
+uv tool install binance-syncer
+```
+
 ### From source
 ```bash
 git clone https://github.com/caymaar/binance-syncer.git
@@ -23,41 +37,43 @@ cd binance-syncer
 pip install .
 ```
 
-### Development mode
-```bash
-git clone https://github.com/caymaar/binance-syncer.git
-cd binance-syncer
-pip install -e .
-```
-
-## 🛠️ Configuration
+## Configuration
 
 ### Automatic configuration
 On first launch, the syncer automatically creates:
 
 ```
-~/.config/binance_syncer/config.ini
-~/logs/binance_syncer/
+~/utilities/config/binance_syncer.ini
+~/utilities/logs/binance_syncer/
 ```
 
 ### Manual configuration
-Edit `~/.config/binance_syncer/config.ini`:
+Edit `~/.config/binance_syncer/config.ini` and replace with your configuration:
 
 ```ini
-[DEFAULT]
-local_prefix = /path/to/your/local/data
-remote_prefix = binance
-s3_bucket = your-s3-bucket
+[LOCAL]
+PATH = ~/binance-vision
+
+[S3]
+BUCKET = my-binance-data-bucket
+PREFIX = binance-vision
+
+[SETTINGS]
+MAX_CONCURRENT_DOWNLOADS = 100
+SYMBOL_CONCURRENCY = 10
 ```
 
 ### AWS environment variables (for S3)
+
+To set your S3:
+
 ```bash
 export AWS_ACCESS_KEY_ID=your_access_key
 export AWS_SECRET_ACCESS_KEY=your_secret_key
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
-## 🖥️ Usage
+## Usage
 
 ### Command Line Interface
 
@@ -125,7 +141,7 @@ asyncio.run(main())
 
 ### Local storage
 ```
-~/binance/
+~/binance-vision/
 ├── data/
 │   ├── spot/
 │   │   ├── klines/
@@ -144,7 +160,7 @@ asyncio.run(main())
 ### S3 storage
 ```
 s3://your-bucket/
-├── binance/
+├── binance-vision/
 │   ├── data/
 │   │   ├── spot/
 │   │   │   ├── klines/
@@ -172,49 +188,19 @@ s3://your-bucket/
 - **Days**: 1d
 - **Weeks**: 1w
 
-## Project Architecture
-
-```
-src/binance_syncer/
-├── __main__.py              # Module entry point
-├── cli.py                   # Command line interface
-├── binance_data_sync.py     # Main synchronization class
-└── utils/
-    ├── enums.py            # Enumerations (MarketType, DataType, etc.)
-    ├── logger.py           # Logging configuration with rich
-    ├── utils.py            # Utilities (BinancePathBuilder, etc.)
-    └── config.ini          # Default configuration
-```
-
 ## Logging and Monitoring
 
 ### Log files
-Logs are automatically created in:
-```
-~/logs/binance_syncer/
-├── log_20250127_143022.log
-├── log_20250127_150045.log
-└── ...
-```
+Logs are automatically created in `~/utilities/logs/binance_syncer/`
 
 ### Automatic rotation
-- Retention: Maximum 5 log files
-- Format: ISO timestamp + level + module:function:line + message
+- Retention: 7 days
 - Levels: DEBUG, INFO, WARNING, ERROR
-
-### Real-time monitoring
-```bash
-# Follow logs in real-time
-tail -f ~/logs/binance_syncer/log_$(date +%Y%m%d)_*.log
-
-# Filter by level
-grep "ERROR" ~/logs/binance_syncer/log_*.log
-```
 
 ## Performance and Optimizations
 
 ### Concurrency
-- **Downloads**: 50 simultaneous tasks per symbol
+- **Downloads**: 100 simultaneous tasks per symbol
 - **Symbols**: 10 symbols processed in parallel
 - **Batches**: Processing in batches of 20 to avoid overload
 
@@ -246,18 +232,3 @@ python -c "import ssl, certifi; print(certifi.where())"
 aws configure list
 aws s3 ls s3://your-bucket/
 ```
-
-### Debug mode
-```bash
-# Enable verbose logging
-binance-syncer --market-type spot --data-type klines --interval 1d \
-  --verbose --dry-run
-```
-
-## Requirements
-
-- **Python**: >= 3.11
-- **System**: macOS, Linux, Windows
-- **Memory**: Minimum 2GB RAM (recommended 4GB+ for large volumes)
-- **Network**: Stable internet connection
-- **AWS**: Configured credentials (for S3 storage)

@@ -1,14 +1,13 @@
 import argparse
 import asyncio
 import sys
+from utilities import LoggingConfigurator
 
-from binance_syncer.utils.logger import configure_logger
-from binance_syncer.utils.enums import MarketType, DataType, KlineInterval
+from binance_syncer.constant import MarketType, DataType, KlineInterval
 from binance_syncer.binance_data_sync import BinanceDataSync
 
 import logging
 
-configure_logger()
 logger = logging.getLogger(__name__)
 
 def create_parser() -> argparse.ArgumentParser:
@@ -76,13 +75,6 @@ Examples:
         "--progress",
         action="store_true",
         help="Show progress bar during synchronization"
-    )
-
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging"
     )
 
     parser.add_argument(
@@ -156,7 +148,7 @@ async def run_sync(args: argparse.Namespace) -> None:
             with urllib.request.urlopen('https://s3-ap-northeast-1.amazonaws.com', context=ssl_context, timeout=5) as _:
                 logger.debug("✅ SSL test connection successful")
         except Exception as ssl_error:
-            logger.debug(f"❌ SSL test failed: {ssl_error}")
+            logger.debug(f"SSL test failed: {ssl_error}")
             logger.debug("Trying with alternative SSL configuration...")
         
         # Create syncer instance
@@ -207,16 +199,13 @@ async def run_sync(args: argparse.Namespace) -> None:
         logger.info(f"  Symbols: {len(symbols)} total")
 
         await syncer.sync(symbols)
-        logger.info("\n✅ Synchronization completed successfully!")
+        logger.info("\nSynchronization completed successfully!")
 
     except KeyboardInterrupt:
-        logger.info("\n❌ Synchronization interrupted by user")
+        logger.info("\nSynchronization interrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.info(f"\n❌ Synchronization failed: {e}")
-        if args.verbose:
-            import traceback
-            traceback.logger.info_exc()
+        logger.info(f"\nSynchronization failed: {e}")
         sys.exit(1)
 
 def main() -> None:
@@ -225,7 +214,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # Configure logging
-    configure_logger()
+    LoggingConfigurator.configure(project="binance_syncer", level="INFO", retention_days=7)
 
     # Validate arguments
     if not validate_args(args):
