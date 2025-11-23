@@ -61,6 +61,8 @@ PREFIX = binance-vision
 [SETTINGS]
 MAX_CONCURRENT_DOWNLOADS = 100
 SYMBOL_CONCURRENCY = 10
+BATCH_SIZE_SYNC = 20
+BATCH_SIZE_DELETE = 1000
 ```
 
 ### AWS environment variables (for S3)
