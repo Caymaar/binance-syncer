@@ -28,7 +28,7 @@ class BinancePathBuilder:
 
         path_parts = [BASE_URL, "data", self.market_type.value, frequency.value, self.data_type.value]
 
-        if self.data_type == DataType.KLINES:
+        if self.data_type in [DataType.KLINES, DataType.INDEX_PRICE_KLINES, DataType.MARK_PRICE_KLINES, DataType.PREMIUM_INDEX_KLINES]:
             assert self.interval is not None, "Interval must be provided for Klines"
             path_parts.append(symbol)
             path_parts.append(self.interval.value)
@@ -43,7 +43,7 @@ class BinancePathBuilder:
     def build_listing_files_path(self, frequency: Frequency, symbol: str) -> str:
         path_parts = [BASE_URL, "?prefix=data", self.market_type.value, frequency.value, self.data_type.value]
         path_parts.append(symbol)
-        if self.data_type == DataType.KLINES:
+        if self.data_type in [DataType.KLINES, DataType.INDEX_PRICE_KLINES, DataType.MARK_PRICE_KLINES, DataType.PREMIUM_INDEX_KLINES]:
             assert self.interval is not None, "Interval must be provided for Klines"
             path_parts.append(self.interval.value)
         return "/".join(path_parts)
@@ -54,7 +54,7 @@ class BinancePathBuilder:
     
     def build_save_path(self, prefix: str, symbol: str, filename: str = None) -> str:
         path_parts = [prefix, "data", self.market_type.value, self.data_type.value, symbol]
-        if self.data_type == DataType.KLINES:
+        if self.data_type in [DataType.KLINES, DataType.INDEX_PRICE_KLINES, DataType.MARK_PRICE_KLINES, DataType.PREMIUM_INDEX_KLINES]:
             assert self.interval is not None, "Interval must be provided for Klines"
             path_parts.append(self.interval.value)
         if filename:
