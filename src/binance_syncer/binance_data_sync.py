@@ -438,7 +438,7 @@ class BinanceDataSync:
                                     df = pd.read_csv(f, header=None)
                                     df.columns = Headers[self.data_type.name].value
                                     
-                                    if self.data_type == DataType.KLINES:
+                                    if self.data_type in [DataType.KLINES, DataType.INDEX_PRICE_KLINES, DataType.MARK_PRICE_KLINES, DataType.PREMIUM_INDEX_KLINES]:
                                         for col in ['open_time', 'close_time']:
                                             if col in df.columns:
                                                 df[col] = safe_parse_time(df[col])
