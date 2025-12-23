@@ -436,7 +436,12 @@ class BinanceDataSync:
                             with zf.open(zf.namelist()[0]) as f:
                                 if self.data_type.name in Headers.__members__:
                                     df = pd.read_csv(f, header=None)
-                                    df.columns = Headers[self.data_type.name].value
+                                    
+                                    if len(df) > 0 and any(isinstance(x, str) for x in df.iloc[0]):
+                                        df.columns = df.iloc[0]
+                                        df = df[1:].reset_index(drop=True)
+                                    else:
+                                        df.columns = Headers[self.data_type.name].value
                                     
                                     if self.data_type in [DataType.KLINES, DataType.INDEX_PRICE_KLINES, DataType.MARK_PRICE_KLINES, DataType.PREMIUM_INDEX_KLINES]:
                                         for col in ['open_time', 'close_time']:
