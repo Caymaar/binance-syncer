@@ -1,6 +1,6 @@
 [project]
 name = "binance_syncer"
-version = "0.2.3"
+version = "3.0.0"
 description = "A high-performance synchronization tool for downloading and managing Binance historical data (klines, trades, etc.) asynchronously. It supports both local and S3 storage with intelligent data optimization (monthly vs daily preference)."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -15,6 +15,8 @@ dependencies = [
     "certifi>=2025.7.14",
     "rich>=14.0.0",
     "utilities-toolkit>=0.2.0",
+    "duckdb>=1.4.3",
+    "click>=8.1.8",
 ]
 
 [project.scripts]
@@ -26,3 +28,8 @@ packages = ["src/binance_syncer"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.31.0",
+]

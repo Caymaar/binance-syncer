@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
 from utilities import Config, LoggingConfigurator
 
-from binance_syncer.constant import MarketType, DataType, Frequency, KlineInterval, Headers
+from ..constant import MarketType, DataType, Frequency, KlineInterval, SCHEMA, TIME_COLUMNS, TIMESTAMP_COLUMNS, DATE_COLUMNS
 from binance_syncer.utils import BinancePathBuilder, safe_parse_time
 
 import logging
@@ -34,7 +34,7 @@ BINANCE_SYNCER_CONFIG_DICT = {
 Config.ensure_initialized("binance_syncer", BINANCE_SYNCER_CONFIG_DICT)
 
 
-class BinanceDataSync:
+class Syncer:
 
     LOCAL_PREFIX = Config.BINANCE_SYNCER.LOCAL.PATH
     S3_PREFIX = Config.BINANCE_SYNCER.S3.PREFIX
@@ -45,24 +45,23 @@ class BinanceDataSync:
     BATCH_SIZE_SYNC = int(Config.BINANCE_SYNCER.SETTINGS.BATCH_SIZE_SYNC)                      # number of files processed in a batch
     BATCH_SIZE_DELETE = int(Config.BINANCE_SYNCER.SETTINGS.BATCH_SIZE_DELETE)                  # number of files processed in a batch
 
-    def __init__(self, storage_mode: str, market_type: MarketType, data_type: DataType, 
-                    interval: KlineInterval = None, progress: bool = False):
+    def __init__(self, market_type: MarketType, data_type: DataType, 
+                    interval: KlineInterval = None, progress: bool = False, s3: bool = False):
             """
             Initialize the BinanceDataSync object.
             This method sets up the instance with the provided configuration parameters and
             initializes additional components such as the path builder and a robust SSL context.
             If the storage mode is set to 's3', it also initializes an S3 client.
             Parameters:
-                storage_mode (str): The storage mode to use (e.g., 's3' for Amazon S3 storage).
                 market_type (MarketType): The type of market data being processed.
                 data_type (DataType): The type of data to sync.
                 interval (KlineInterval, optional): The interval at which the kline data is updated.
                                                         Defaults to None.
                 progress (bool, optional): Flag indicating whether to display progress during operation.
                                             Defaults to False.
+                s3 (bool, optional): Flag indicating whether to use S3 for storage. Defaults to False.
             """
-            
-            self.storage_mode = storage_mode
+        
             self.market_type = market_type
             self.data_type = data_type
             self.interval = interval
@@ -72,9 +71,11 @@ class BinanceDataSync:
             # Configuration SSL robuste
             self._ssl_context = self._create_ssl_context()
             
-            if storage_mode == 's3':
+            if s3:
                 import boto3
                 self.s3 = boto3.client('s3')
+            else:
+                self.s3 = None
 
     def _create_ssl_context(self):
         """
@@ -179,7 +180,7 @@ class BinanceDataSync:
             set[str]: A set of date strings derived from file names or S3 object keys representing the available data dates.
         """
 
-        if self.storage_mode == 's3':
+        if self.s3 is not None:
             prefix = self.path_builder.build_save_path(self.S3_PREFIX, symbol)
             paginator = self.s3.get_paginator("list_objects_v2")
             existing = set()
@@ -338,7 +339,7 @@ class BinanceDataSync:
                 Frequency.DAILY, symbol, *date_parts))
 
         if dates_dict['D_RM']:
-            if self.storage_mode == 's3':
+            if self.s3 is not None:
                 await self.batch_delete_s3(list(dates_dict['D_RM']), symbol)
             else:
                 delete_semaphore = asyncio.Semaphore(20)
@@ -410,7 +411,7 @@ class BinanceDataSync:
         async with semaphore:
             filename = f"{'-'.join(file_key.split('/')[-1].replace('.zip', '').split('-')[2:])}.parquet"
 
-            if self.storage_mode == 's3':
+            if self.s3 is not None:
                 file_path = self.path_builder.build_save_path(self.S3_PREFIX, symbol, filename)
                 try:
                     self.s3.head_object(Bucket=self.S3_BUCKET, Key=file_path)
@@ -431,26 +432,47 @@ class BinanceDataSync:
                             data.write(chunk)
                         
                         data.seek(0)
-                        
+
                         with ZipFile(data) as zf:
                             with zf.open(zf.namelist()[0]) as f:
-                                if self.data_type.name in Headers.__members__:
-                                    df = pd.read_csv(f, header=None)
+
+                                # Read CSV into DataFrame (with appropriate headers)
+                                cols = SCHEMA.get(self.market_type, {}).get(self.data_type, None)
+                                if cols is not None:
+                                    # Check if file has content
+                                    first_line = f.readline()
+                                    if not first_line:
+                                        logger.warning(f"Empty file: {file_key}")
+                                        return False
                                     
-                                    if len(df) > 0 and any(isinstance(x, str) for x in df.iloc[0]):
-                                        df.columns = df.iloc[0]
-                                        df = df[1:].reset_index(drop=True)
+                                    f.seek(0)  # Reset file pointer
+                                    
+                                    header = pd.read_csv(f, header=None, nrows=1)
+                                    if len(header) > 0 and len(header.columns) > 0 and all(isinstance(x, str) for x in header.iloc[0]):
+                                        f.seek(0)
+                                        df = pd.read_csv(f, header=None, skiprows=1)
                                     else:
-                                        df.columns = Headers[self.data_type.name].value
+                                        f.seek(0)
+                                        df = pd.read_csv(f, header=None)
                                     
-                                    if self.data_type in [DataType.KLINES, DataType.INDEX_PRICE_KLINES, DataType.MARK_PRICE_KLINES, DataType.PREMIUM_INDEX_KLINES]:
-                                        for col in ['open_time', 'close_time']:
-                                            if col in df.columns:
-                                                df[col] = safe_parse_time(df[col])
+                                    if df.empty:
+                                        logger.warning(f"Empty dataframe after reading: {file_key}")
+                                        return False
+                                    
+                                    df.columns = cols
                                 else:
                                     df = pd.read_csv(f)
-                                
-                                if self.storage_mode == 's3':
+
+                                # Convert time columns
+                                for col in df.columns:
+                                    if col in TIMESTAMP_COLUMNS:
+                                        df[col] = pd.to_datetime(df[col], format="%Y-%m-%d %H:%M:%S")
+                                    elif col in DATE_COLUMNS:
+                                        df[col] = pd.to_datetime(df[col], format="%Y-%m-%d")
+                                    elif col in TIME_COLUMNS:
+                                        df[col] = safe_parse_time(df[col])
+                                    
+                                if self.s3 is not None:
                                     out = BytesIO()
                                     df.to_parquet(out, compression="snappy", index=False)
                                     out.seek(0)
@@ -472,7 +494,6 @@ class BinanceDataSync:
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff
 
             return False
-
 
     async def batch_delete_s3(self, files_to_delete: list[str], symbol: str):
         """
@@ -562,7 +583,7 @@ class BinanceDataSync:
             """
 
             async with semaphore:
-                if self.storage_mode == 's3':
+                if self.s3 is not None:
                     file_path = self.path_builder.build_save_path(self.S3_PREFIX, symbol, f"{file_date}.parquet")
                     try:
                         await self.s3_async.delete_object(Bucket=self.S3_BUCKET, Key=file_path)
@@ -596,6 +617,10 @@ class BinanceDataSync:
 
         if symbols is None:
             symbols = await self.list_remote_symbols()
+
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
         logger.info(f"Syncing {len(symbols)} symbols for {self.market_type.value}{self.data_type.value} with interval {self.interval.value if self.interval else 'N/A'}")
 
         if self.progress:

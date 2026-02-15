@@ -14,7 +14,7 @@ class BinancePathBuilder:
     data_type: DataType
     interval: KlineInterval = None
 
-    def build_download_path(self, frequency: Frequency, symbol: str, year: str, month: str, day: str = None, prefix: bool = False) -> str:
+    def build_download_path(self, frequency: Frequency, symbol: str, year: str, month: str, day: str = None) -> str:
         month = int(month)
         year = int(year)
         day = int(day) if day is not None else None
@@ -65,43 +65,11 @@ def safe_parse_time(series: pd.Series) -> pd.Series:
     sample = series.iloc[0]
     for unit in ["ms", "us", "ns"]:
         try:
-            ts = pd.to_datetime(sample, unit=unit)
-            if 2000 < ts.year < datetime.now().year + 2:
-                return pd.to_datetime(series, unit=unit)
+            # Convert to numeric first to avoid FutureWarning
+            ts = pd.to_datetime(pd.to_numeric(sample, errors='coerce'), unit=unit)
+            if ts is not pd.NaT and 2000 < ts.year < datetime.now().year + 2:
+                return pd.to_datetime(pd.to_numeric(series, errors='coerce'), unit=unit)
         except Exception:
             continue
     logger.error(f"Impossible to parse time for {series.name} with sample {sample}")
     raise ValueError(f"Cannot parse timestamp {sample}")
-
-if __name__ == "__main__":
-    # Exemple d'utilisation
-    builder = BinancePathBuilder(
-        market_type=MarketType.SPOT,
-        data_type=DataType.KLINES,
-        interval=KlineInterval.D1
-    )
-
-    download_path = builder.build_download_path(
-        frequency=Frequency.DAILY,
-        symbol="BTCUSDT",
-        year=2023,
-        month=10,
-        day=1
-    )
-    print(f"Download path: {download_path}")
-
-    save_path = builder.build_save_path(
-        prefix="local_data",
-        symbol="BTCUSDT"
-    )
-    print(f"Save path: {save_path}")
-
-    listing_files_path = builder.build_listing_files_path(
-        frequency=Frequency.DAILY,
-        symbol="BTCUSDT"
-    )
-    print(f"Listing files path: {listing_files_path}")
-
-    listing_symbols_path = builder.build_listing_symbols_path()
-    print(f"Listing symbols path: {listing_symbols_path}")
-
