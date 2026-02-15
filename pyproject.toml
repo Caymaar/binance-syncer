@@ -1,6 +1,6 @@
 [project]
 name = "binance_syncer"
-version = "3.0.0"
+version = "4.0.0"
 description = "A high-performance synchronization tool for downloading and managing Binance historical data (klines, trades, etc.) asynchronously. It supports both local and S3 storage with intelligent data optimization (monthly vs daily preference)."
 readme = "README.md"
 requires-python = ">=3.9"
