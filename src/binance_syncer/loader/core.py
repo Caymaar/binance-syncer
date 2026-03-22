@@ -20,6 +20,23 @@ from ..constant import (
 
 from ..utils import BinancePathBuilder
 
+BINANCE_SYNCER_CONFIG_DICT = {
+    'LOCAL': {
+        "PATH": f"{Path.home()}/binance-vision"
+        },
+    'S3': {
+        "BUCKET": "my-binance-data-bucket",
+        "PREFIX": "binance-vision"
+        },
+    'SETTINGS': {
+        "MAX_CONCURRENT_DOWNLOADS": 100,
+        "SYMBOL_CONCURRENCY": 10,
+        "BATCH_SIZE_SYNC": 20,
+        "BATCH_SIZE_DELETE": 1000
+        }
+}
+
+Config.ensure_initialized("binance_syncer", BINANCE_SYNCER_CONFIG_DICT)
 
 TimeLike = Union[str, dt.datetime]
 
@@ -204,17 +221,38 @@ class Loader:
 
     def available_symbols(self) -> List[str]:
         if self.s3:
-            # List symbols from S3
-            prefix = self.path_builder.build_save_path(self.S3_PREFIX, "").rstrip("/") + "/"
+            # Build prefix up to data_type level (e.g. "binance/data/spot/klines/")
+            # We cannot use build_save_path(S3_PREFIX, "") here because an empty symbol
+            # produces a double-slash and the interval gets appended at the wrong level.
+            base_prefix = "/".join([
+                self.S3_PREFIX, "data", self.market_type.value, self.data_type.value
+            ]) + "/"
+
             paginator = self.s3_client.get_paginator("list_objects_v2")
-            syms = set()
-            for page in paginator.paginate(Bucket=self.S3_BUCKET, Prefix=prefix, Delimiter="/"):
+            syms: List[str] = []
+
+            # One paginated call to get all symbol-level "directories"
+            for page in paginator.paginate(Bucket=self.S3_BUCKET, Prefix=base_prefix, Delimiter="/"):
                 for common_prefix in page.get("CommonPrefixes", []):
-                    # Extract symbol from prefix like: prefix/BTCUSDT/
                     symbol = common_prefix["Prefix"].rstrip("/").split("/")[-1]
-                    if symbol:
-                        syms.add(symbol)
-            return sorted(list(syms))
+                    if not symbol:
+                        continue
+
+                    # If an interval is set, verify this symbol actually has data for it
+                    # (MaxKeys=1 is a cheap existence check — no full scan)
+                    if self.interval:
+                        interval_prefix = f"{base_prefix}{symbol}/{self.interval.value}/"
+                        resp = self.s3_client.list_objects_v2(
+                            Bucket=self.S3_BUCKET,
+                            Prefix=interval_prefix,
+                            MaxKeys=1,
+                        )
+                        if not resp.get("Contents"):
+                            continue
+
+                    syms.append(symbol)
+
+            return sorted(syms)
         else:
             # List symbols from local filesystem
             root = self.base_path / "data" / self.market_type.value / self.data_type.value
